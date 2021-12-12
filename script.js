@@ -6,11 +6,8 @@ class Workout {
     date = new Date();
     //it's recommended to use additional libraries for generating IDs
     //for this project we generate ID from the date
-    //id = Math.abs(Date.now());
-
     //create a UUID identifier - private field
     id = Date.now().toString(36)+Math.random().toString(36).slice(2);
-
     clicks = 0;
 
     constructor(coords, distance, duration) {
@@ -20,9 +17,6 @@ class Workout {
     }
 
     _setDescription() {
-    // const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    // this.description = `${this.type[0].toUpperCase()}${this.type.slice(1)} on ${months[this.date.getMonth()]} ${this.date.getDate()}`
-
     this.description = `${this.type[0].toUpperCase()}${this.type.slice(1)} on ${new Intl.DateTimeFormat(navigator.language, {month:'short', day:'numeric'}).format(this.date)}`
     }
 
@@ -62,12 +56,6 @@ class Cycling extends Workout {
         return this.speed
     }
 }
-
-//testing classes
-// const run1 = new Running([49, 24], 3, 25, 178);
-// const cycle1 = new Cycling([49, 24], 26, 99, 567);
-// console.log(run1, cycle1);
-
 ///////////////////////////////////////////////////////////////////////
 //APPLICATION ARCHITECTURE
 // prettier-ignore
@@ -94,14 +82,15 @@ class App {
     #mapEvent;
     #workouts = [];
     #markers = [];
-    //the constructor is loading when the page loads.
-    //so we can load all required methods here
     constructor() {
     //Get User's position
     this._getPosition();
 
     //Get data from local storage
     this._getLocalStorage();
+
+    //load Overview and Delete All buttons
+   // this._loadControlButtons();
     
     //Attach event handlers
     //submit form after clicking the 'Enter' key
@@ -110,7 +99,6 @@ class App {
     form.reset();
 
     containerWorkouts.addEventListener('click', e => this._handleClick(e));
-    //containerWorkouts.addEventListener('click', this._moveToPopup.bind(this));
 
     //change the form fields while switching the Type field
     inputType.addEventListener('change', this._toggleElevationField);
@@ -121,11 +109,14 @@ class App {
     //clear workouts listeners
     clearAllBtn.addEventListener('click', this._showDeleteMsg);
 
-    yesBtn.addEventListener('click', this._clearAll);
+    yesBtn.addEventListener('click', this._clearAll.bind(this));
 
     noBtn.addEventListener('click', () => confirmMsg.classList.add('hidden'));
     }
 
+    _loadControlButtons() {
+        this.#workouts.length !== 0 ? buttons.classList.remove('hidden') : buttons.classList.add('hidden');
+    }
     _getPosition() {
     //Use Geolocation API
     //we use optional chaining to check if the current browser supports geolocation - for old browsers
@@ -137,14 +128,9 @@ class App {
     _loadMap(position){
     addNewItemMsg.classList.remove('hidden');
     allowLocationMsg.classList.add('hidden');
-    buttons.classList.remove('hidden');
-    //  const latitude = position.coords.latitude;
-    //  const longitude = position.coords.longitude;
-    //the same using destructuring
-        const {latitude} = position.coords;
-        const {longitude} = position.coords;
-    //console.log(`https://www.google.com/maps/@${latitude},${longitude}`);
-
+    this._loadControlButtons();
+    const {latitude} = position.coords;
+    const {longitude} = position.coords;
     const coords = [latitude, longitude];
     this.#map = L.map('map').setView(coords, this.#mapZoomLevel);
 
@@ -155,7 +141,6 @@ class App {
 
     //handling clicks on map
     // .on() method from the Leaflet Library, using instead of the .addEventListener()
-    //all method are chained here
     this.#map.on('click', this._showForm.bind(this));
 
      //to display workouts loaded from the local storage we can loop over them and then render on the map
@@ -172,12 +157,10 @@ class App {
         if (e.target.className.includes('delete-btn')) {
           let workoutId = e.target.closest('.workout').dataset.id;
           this._deleteWorkout(workoutId);
-          // alert('are you sure?');
         }
       }
     
     _showForm(mapE){
-          //copying the mapEvent to use in the Global Scope
           this.#mapEvent = mapE;
           form.classList.remove('hidden');
           addNewItemMsg.classList.add('hidden');
@@ -201,9 +184,7 @@ class App {
 
     _newWorkout(e){
         const validInputs = (...inputs) => inputs.every(input => Number.isFinite(input));
-
         const allPositive = (...inputs) => inputs.every(input => input>0);
-
         e.preventDefault();
 
         //get data from form
@@ -220,15 +201,14 @@ class App {
             // if(!Number.isFinite(distance) || !Number.isFinite(duration) || !Number.isFinite(cadence)) 
             if(!validInputs(distance,duration,cadence) || !allPositive(distance,duration,cadence))
             return alert('Inputs have to be positive numbers');
-
-        workout = new Running(coordinates,distance, duration, cadence);
+            workout = new Running(coordinates,distance, duration, cadence);
         }
         //if workout is cycling, create a cycling object
         if(type === 'cycling') {
             const elevation = +inputElevation.value;
             if(!validInputs(distance,duration,elevation) || !allPositive(distance,duration))
             return alert('Inputs have to be positive numbers');
-        workout = new Cycling(coordinates,distance, duration, elevation);
+            workout = new Cycling(coordinates,distance, duration, elevation);
         }     
 
         //add a new object to the workout array
@@ -245,6 +225,9 @@ class App {
 
         //set local storage to all workouts
         this._setLocalStorage();
+
+        //load Overview and Delete All buttons
+        this._loadControlButtons();
     }
     _renderWorkoutMarker(workout) {
         const marker = L.marker(workout.coords, {riseOnHover:true});
@@ -316,25 +299,25 @@ class App {
     }     
    
     _moveToPopup(e) {
-    // BUGFIX: When we click on a workout before the map has loaded, we get an error. But there is an easy fix:
-    if (!this.#map) return;
-    const workoutEl = e.target.closest('.workout');
-    if (!workoutEl) return;
-    const workout = this.#workouts.find(
-      work => work.id === workoutEl.dataset.id
-    );
- 
-    //move to the selected marker
-    // this.#map.setView(workout.coords, this.#mapZoomLevel, {
-    //     animate: true,
-    //     pan: {duration: 1},
-    // });
+        // BUGFIX: When we click on a workout before the map has loaded, we get an error. But there is an easy fix:
+        if (!this.#map) return;
+        const workoutEl = e.target.closest('.workout');
+        if (!workoutEl) return;
+        const workout = this.#workouts.find(
+        work => work.id === workoutEl.dataset.id
+        );
+    
+        //move to the selected marker
+        // this.#map.setView(workout.coords, this.#mapZoomLevel, {
+        //     animate: true,
+        //     pan: {duration: 1},
+        // });
 
-    //move to the selected marker wth an animation
-    this.#map.flyTo(workout.coords, this.#mapZoomLevel);
+        //move to the selected marker wth an animation
+        this.#map.flyTo(workout.coords, this.#mapZoomLevel);
 
-    //using the public interface count clicks
-    workout.click();  //will not work with the local storage because of the lost prototype  inheritance; it is required to reset the prototype chain
+        //using the public interface count clicks
+        workout.click();  //will not work with the local storage because of the lost prototype  inheritance; it is required to reset the prototype chain
     }
 
     _setLocalStorage() {
@@ -343,7 +326,6 @@ class App {
 
     _getLocalStorage() {
         const data = JSON.parse(localStorage.getItem('workouts'));
-        //console.log(data);
         if (!data) return;
 
         this.#workouts = data;
@@ -354,9 +336,8 @@ class App {
         //fix the prototype chain to use the public methods
         data.forEach(
             (it) =>
-              (it.__proto__ =
-                it.type === "running" ? Running.prototype : Cycling.prototype)
-          );
+              (it.__proto__ = it.type === "running" ? Running.prototype : Cycling.prototype)
+        );
     }
 
     //delete a single workout
@@ -378,7 +359,8 @@ class App {
     }
     _clearAll() {
         localStorage.removeItem('workouts');
-        location.reload();
+        const workoutEls = document.querySelectorAll(".workouts > li");
+        workoutEls.forEach(workout => this._deleteWorkout(workout.dataset.id));
         confirmMsg.classList.add('hidden');
         buttons.classList.add('hidden');
         addNewItemMsg.classList.remove('hidden');
